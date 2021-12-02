@@ -1,0 +1,225 @@
+---
+title: "An an descriptive analysis of the results of Enem"
+author: "Maria Sales"
+date: "02/12/2021"
+output: pdf_document
+---
+This project is an a descriptive analyses of results of the Enem. The goal is 
+create similar groupsbased on the grades of students in the three areas of the 
+examen.Based on that groups, it was perfomed an descriptive analysis to 
+understand the main characteristicas ofeach group. 
+```{r}
+#Loading the packages
+library(tidyverse) #pacote para manipulacao de dados
+library(cluster) #algoritmo de cluster
+library(dendextend) #compara dendogramas
+library(factoextra) #algoritmo de cluster e visualizacao
+library(fpc) #algoritmo de cluster e visualizacao
+library(gridExtra) #para a funcao grid arrange
+library(readxl)
+library(readr)
+```
+
+Reading the data set and checking the dimension of the data
+```{r}
+df<- read_csv("C:/Users/jeova/Downloads/microdados_com_proficiencia_sample.csv")
+View(df)
+dim(df)
+```
+
+The data set was filtered in to order excluder null values. These values was 
+removed because theycreate a bias in the analyses. That is why the students who
+did not attend of the the days of the examem received a zero score and this score 
+does not reflect the perfomance of the student. 
+```{r}
+#Excluding outliers
+df <- filter(df,NU_NOTA_CH != 0 & NU_NOTA_CN != 0)
+dim(df)
+```
+The clustering was carried out using the k-mean algortimh and the hierarchical 
+method. First of all, the data set was divided in order to keep just the 
+variables which would be used in the clusterization.
+```{r}
+"Creating a new data set"
+df_1<- data.frame(df$NU_INSCRICAO,df$NU_NOTA_CH,df$NU_NOTA_CN)
+View(df_1)
+
+# setting the name of the rows
+rownames(df_1)<- df_1[,1]
+df_1 <- df_1[,-1]
+View(df_1)
+```
+
+The hierarquical method was used to establish the number of groups to be used in
+the k-means method. How the data set is too big with 50000 rows. It is not 
+appropriate to use just the hierarquical method for the clusterizion. 
+The k- mean method is more suitable, but is necessary first feed the algorith 
+with the numbers of clusters   
+
+For that, it was selected randomly a numbers of rows to create a smaller data 
+set and so on perfomerthe hierarquical method. 
+```{r}
+# Selecting randomless a numbers of rows to create a new dataframe
+df_2 <- sample_n(df_1, size = 3000, replace = FALSE)
+view(df_2)
+
+#Calculating the matrix distance
+distance_2 <- dist(df_2, method = 'euclidean')
+
+#Clustering using the average method
+C_3<-hclust(distance_2, method='average')
+```
+
+The dendogram was plotted to see the formation of the groups
+```{r}
+#Plotting the dendogram
+plot(C_3, cex = 0.6, hang = -1)
+```
+
+The elbow method was used to establish the number of groups that will be used in the k-mean method, It was noticed that 4 groups seems like a ideal numbers to proceed the analysis. 
+```{r}
+# Using the elbow method to establish the number of groups
+fviz_nbclust(df_2, FUN = hcut, method = 'wss')
+```
+
+The k-means algorthim was perfomend using 3,4,5 and 6 centers to seeing the how the groups changes
+according to the number of the groups. As said before, 4 groups seems a suitable number for the analysis.
+```{r}
+C_k3 <- kmeans(df_1, centers = 3)
+C_k4 <- kmeans(df_1, centers = 4)
+C_k5 <- kmeans(df_1, centers = 5)
+C_k6 <- kmeans(df_1, centers = 6)
+
+#Transforming the cluster in a dataset
+C_k4_df <- data.frame(C_k4$cluster)
+View(C_k4_df)
+```
+
+The clusterization with all the suggested groups can be seen in the graph below.
+```{r}
+# Visualizing the clusters
+G_k3 <- fviz_cluster(C_k3, geom = 'point', data = df_1, main = 'Cluster_k3')
+G_k4 <- fviz_cluster(C_k4, geom = 'point', data = df_1, main = 'Cluster_k4')
+G_k5 <- fviz_cluster(C_k5, geom = 'point', data = df_1, main = 'Cluster_k5')
+G_k6 <- fviz_cluster(C_k6, geom = 'point', data = df_1, main = 'cluster_k6')
+
+# Printing the graphs together
+
+grid.arrange(G_k3,G_k4,G_k5,G_k6, nrow = 2 )
+
+```
+
+
+An 2D graph was plotted considering 4 groups. 
+```{r}
+#plotting a 2D graph with ggplot
+ggplot(data = df_1) + 
+geom_point(aes( x = df.NU_NOTA_CH,
+                y = df.NU_NOTA_CN,
+               color = as.factor(C_k4_df$C_k4.cluster)))
+
+```
+
+Given that it was chosen 4 groups for the clusterization, it was created a dataframe with the
+main characteristics of each group. 
+```{r}
+# Binding the dataframes
+df_fim <- cbind(df, C_k4_df)
+
+#Categorizing the groups created by kmeans
+
+Enem_description <- df_fim %>%
+ group_by(C_k4.cluster)%>%
+ summarise(n = n(), 
+ mean_nota_CH = mean(NU_NOTA_CH, na.rm = TRUE),
+ mean_nota_CN = mean(NU_NOTA_CN, na.rm= TRUE),
+ mean_nota_LC = mean(NU_NOTA_LC,na.rm= TRUE ),
+ mean = (mean_nota_CH+mean_nota_CN+mean_nota_LC)/3,
+ sexo_Feminino = table(factor(TP_SEXO),exclude = ('M'), useNA = 'no'),
+ sexo_Masculino = table(factor(TP_SEXO),exclude = ('F'),useNA = 'no'),
+ raca_n_declarado = table(factor(TP_COR_RACA), exclude = c(1,2,3,4,5),useNA = 'no'),
+ raca_branca = table(factor(TP_COR_RACA), exclude = c(0,2,3,4,5),useNA = 'no'),
+ raca_preta = table(factor(TP_COR_RACA), exclude = c(0,1,3,4,5),useNA = 'no'),
+ raca_parda = table(factor(TP_COR_RACA), exclude = c(0,1,2,4,5),useNA = 'no'),
+ raca_amarela = table(factor(TP_COR_RACA), exclude = c(0,1,2,3,5),useNA = 'no'),
+ raca_indigena = table(factor(TP_COR_RACA), exclude = c(0,1,2,3,4),useNA = 'no'),
+ escola_n_respondeu = table(factor(TP_ESCOLA), exclude = c(2,3,4),useNA = 'no'),
+ escola_publica = table(factor(TP_ESCOLA), exclude = c(1,3,4),useNA = 'no'),
+ escola_privada = table(factor(TP_ESCOLA), exclude = c(1,2,4),useNA = 'no'))
+
+Enem_description <- relocate(Enem_description, mean, .after = n)
+
+View(Enem_description)
+
+```
+
+To better analyse the characteristics of the groups, the results were transformed 
+to proportion
+```{r}
+Enem_description_pct <-  Enem_description %>%
+  select(everything(), -c(C_k4.cluster, n, mean, mean_nota_CH,
+  mean_nota_CN, mean_nota_LC))%>%
+  as.matrix()%>%
+  prop.table(margin = 2)%>%
+  data.frame()
+  
+Enem_description_pct <- cbind(Enem_description[,1:3],
+                            Enem_description_pct)
+
+View(Enem_description_pct)
+```
+
+The following code represents the descriptive analyses of the cluster considering
+the familiar income of the students.
+```{r}
+# Description analysis of the cluster by income
+Enem_description_renda <- df_fim %>%
+group_by(C_k4.cluster)%>%
+summarise(n = n(), 
+mean_nota_CH = mean(NU_NOTA_CH, na.rm = TRUE),
+mean_nota_CN = mean(NU_NOTA_CN, na.rm= TRUE),
+mean_nota_LC = mean(NU_NOTA_LC,na.rm= TRUE ),
+mean = (mean_nota_CH+mean_nota_CN+mean_nota_LC)/3,
+renda_A = table(factor(Q006),exclude = c('A','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q')),
+renda_B = table(factor(Q006),exclude = c('B','A','D','E','F','G','H','I','J','K','L','M','N','O','P','Q')),
+renda_C = table(factor(Q006),exclude = c('B','C','A','E','F','G','H','I','J','K','L','M','N','O','P','Q')),
+renda_D = table(factor(Q006),exclude = c('B','C','D','A','F','G','H','I','J','K','L','M','N','O','P','Q')),
+renda_E = table(factor(Q006),exclude = c('B','C','D','E','A','G','H','I','J','K','L','M','N','O','P','Q')),
+renda_F = table(factor(Q006),exclude = c('B','C','D','E','F','A','H','I','J','K','L','M','N','O','P','Q')),
+renda_G = table(factor(Q006),exclude = c('B','C','D','E','F','G','A','I','J','K','L','M','N','O','P','Q')),
+renda_H = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','A','J','K','L','M','N','O','P','Q')),
+renda_I = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','I','A','K','L','M','N','O','P','Q')),
+renda_J = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','I','J','A','L','M','N','O','P','Q')),
+renda_L = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','I','J','K','A','M','N','O','P','Q')),
+renda_M = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','I','J','K','L','A','N','O','P','Q')),
+renda_O = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','I','J','K','L','M','A','O','P','Q')),
+renda_P = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','I','J','K','L','M','N','A','P','Q')),
+renda_Q = table(factor(Q006),exclude = c('B','C','D','E','F','G','H','I','J','K','L','M','N','O','A','Q')))
+
+Enem_description_renda <- relocate(Enem_description_renda, mean, .after = n)
+
+View(Enem_description_renda)
+```
+
+In the same way, the results were transformed to proportions to better understand 
+the influence of the familiar income in the score of each group
+```{r}
+Enem_description_renda_pct <-  Enem_description_renda %>%
+  select(everything(), -c(C_k4.cluster, n, mean, mean_nota_CH,
+                          mean_nota_CN, mean_nota_LC))%>%
+  as.matrix()%>%
+  prop.table(margin = 2)%>%
+  data.frame()
+
+Enem_description_renda_pct <- cbind(Enem_description_renda[,1:3],
+                              Enem_description_renda_pct)
+
+View(Enem_description_renda_pct)
+
+```
+
+`
+
+
+
+
